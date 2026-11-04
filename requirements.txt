@@ -1,0 +1,9 @@
+wfdb>=4.1.2
+numpy
+pandas
+scipy
+matplotlib
+scikit-learn
+tqdm
+PyYAML
+jupyter
