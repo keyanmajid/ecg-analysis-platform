@@ -30,3 +30,5 @@ outputs/*
 # System
 .DS_Store
 Thumbs.db
+# Trained model checkpoints
+models/
