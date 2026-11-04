@@ -31,7 +31,7 @@ def inspect_validation():
 
     for record_id in validation_records:
 
-        file_path = DATA_DIR / f"{record_id}.npz"
+        file_path = PROCESSED_DIR / f"record_{record_id}.npz"
 
         if not file_path.exists():
             print(f"Missing file: {file_path}")
