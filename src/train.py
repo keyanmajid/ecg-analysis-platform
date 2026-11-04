@@ -3,6 +3,7 @@ import argparse
 import random
 from pathlib import Path
 
+from matplotlib import cm
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +13,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from sklearn.metrics import (
     accuracy_score,
+    confusion_matrix,
     f1_score,
     classification_report,
 )
@@ -332,6 +334,7 @@ def train(experiment):
     print(f"Validation macro-F1: {val_macro_f1:.4f}")
 
     print("\nCLASSIFICATION REPORT")
+    
 
     print(
         classification_report(
@@ -343,7 +346,27 @@ def train(experiment):
             zero_division=0,
         )
     )
+    print("\nPREDICTION DISTRIBUTION")
+    for index, class_name in enumerate(class_names):
+        actual_count = int(np.sum(targets == index))
+        predicted_count = int(np.sum(predictions == index))
 
+        print(
+            f"{class_name}: "
+            f"Actual={actual_count}, "
+            f"Predicted={predicted_count}"
+        )
+
+    print("\nCONFUSION MATRIX")
+    from sklearn.metrics import confusion_matrix
+
+    cm = confusion_matrix(
+        targets,
+        predictions,
+        labels=np.arange(len(class_names)),
+    )
+
+    print(cm)
     print(f"Checkpoint saved: {checkpoint_path}")
 
     print("\nTraining complete.")
