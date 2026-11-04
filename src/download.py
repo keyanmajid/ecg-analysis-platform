@@ -35,8 +35,8 @@ def download_dataset(output_dir: Path):
     print(f"Destination: {output_dir}")
 
     wfdb.dl_database(
-        db_name="mitdb",
-        dl_dir=str(output_dir)
+        "mitdb",
+        str(output_dir)
     )
 
     print("\nDownload completed!")
