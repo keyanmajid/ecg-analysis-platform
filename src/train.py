@@ -3,7 +3,6 @@ import argparse
 import random
 from pathlib import Path
 
-from matplotlib import cm
 import numpy as np
 import torch
 import torch.nn as nn
@@ -41,10 +40,8 @@ MODEL_DIR = ROOT_DIR / "models"
 # ============================================================
 
 def set_seed(seed):
-
     random.seed(seed)
     np.random.seed(seed)
-
     torch.manual_seed(seed)
 
     if torch.cuda.is_available():
@@ -56,21 +53,18 @@ def set_seed(seed):
 # ============================================================
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
-
     model.train()
 
     total_loss = 0.0
     total_samples = 0
 
     for signals, labels in loader:
-
         signals = signals.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
 
         outputs = model(signals)
-
         loss = criterion(outputs, labels)
 
         loss.backward()
@@ -83,7 +77,6 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
         optimizer.step()
 
         batch_size = labels.size(0)
-
         total_loss += loss.item() * batch_size
         total_samples += batch_size
 
@@ -96,7 +89,6 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
 
 @torch.no_grad()
 def validate(model, loader, criterion, device):
-
     model.eval()
 
     total_loss = 0.0
@@ -106,28 +98,20 @@ def validate(model, loader, criterion, device):
     all_targets = []
 
     for signals, labels in loader:
-
         signals = signals.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
         outputs = model(signals)
-
         loss = criterion(outputs, labels)
 
         predictions = outputs.argmax(dim=1)
 
         batch_size = labels.size(0)
-
         total_loss += loss.item() * batch_size
         total_samples += batch_size
 
-        all_predictions.extend(
-            predictions.cpu().numpy()
-        )
-
-        all_targets.extend(
-            labels.cpu().numpy()
-        )
+        all_predictions.extend(predictions.cpu().numpy())
+        all_targets.extend(labels.cpu().numpy())
 
     avg_loss = total_loss / total_samples
 
@@ -157,7 +141,6 @@ def validate(model, loader, criterion, device):
 # ============================================================
 
 def train(experiment):
-
     set_seed(SEED)
 
     device = torch.device(
@@ -167,13 +150,12 @@ def train(experiment):
     print("=" * 70)
     print(f"ECG CNN — EXPERIMENT {experiment}")
     print("=" * 70)
-
     print(f"Device: {device}")
 
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-    # Build the experiment datasets
+    # Build datasets
     data = build_experiment(experiment)
 
     train_loader = data["train_loader"]
@@ -188,10 +170,31 @@ def train(experiment):
         dropout=0.3,
     ).to(device)
 
-    # Weighted classification loss
-    criterion = nn.CrossEntropyLoss(
-        weight=class_weights.to(device)
+    # --------------------------------------------------------
+    # SOFTENED CLASS WEIGHTS
+    # --------------------------------------------------------
+
+    softened_weights = torch.sqrt(class_weights)
+
+    softened_weights = (
+        softened_weights / softened_weights.mean()
     )
+
+    print("\nSoftened training class weights:")
+
+    for name, weight in zip(
+        class_names,
+        softened_weights.tolist(),
+    ):
+        print(f"{name}: {weight:.4f}")
+
+    criterion = nn.CrossEntropyLoss(
+        weight=softened_weights.to(device)
+    )
+
+    # --------------------------------------------------------
+    # OPTIMIZER AND SCHEDULER
+    # --------------------------------------------------------
 
     optimizer = AdamW(
         model.parameters(),
@@ -207,7 +210,10 @@ def train(experiment):
         min_lr=1e-6,
     )
 
-    # Save directory
+    # --------------------------------------------------------
+    # CHECKPOINT CONFIGURATION
+    # --------------------------------------------------------
+
     save_dir = MODEL_DIR / f"experiment_{experiment}"
     save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -256,7 +262,6 @@ def train(experiment):
         improved = val_macro_f1 > best_f1
 
         if improved:
-
             best_f1 = val_macro_f1
             best_epoch = epoch
             epochs_without_improvement = 0
@@ -272,6 +277,8 @@ def train(experiment):
                     "train_std": data["train_std"],
                     "seed": SEED,
                     "experiment": experiment,
+                    "weighting": "sqrt_balanced",
+                    "class_weights": softened_weights.cpu(),
                 },
                 checkpoint_path,
             )
@@ -279,7 +286,6 @@ def train(experiment):
             status = "BEST"
 
         else:
-
             epochs_without_improvement += 1
             status = ""
 
@@ -289,12 +295,10 @@ def train(experiment):
             f"Val Loss: {val_loss:.4f} | "
             f"Val Acc: {val_accuracy:.4f} | "
             f"Val Macro-F1: {val_macro_f1:.4f} | "
-            f"LR: {current_lr:.2e} | "
-            f"{status}"
+            f"LR: {current_lr:.2e} | {status}"
         )
 
         if epochs_without_improvement >= EARLY_STOPPING_PATIENCE:
-
             print("\nEarly stopping triggered.")
             break
 
@@ -308,9 +312,7 @@ def train(experiment):
         weights_only=True,
     )
 
-    model.load_state_dict(
-        checkpoint["model_state_dict"]
-    )
+    model.load_state_dict(checkpoint["model_state_dict"])
 
     (
         val_loss,
@@ -334,7 +336,6 @@ def train(experiment):
     print(f"Validation macro-F1: {val_macro_f1:.4f}")
 
     print("\nCLASSIFICATION REPORT")
-    
 
     print(
         classification_report(
@@ -346,7 +347,9 @@ def train(experiment):
             zero_division=0,
         )
     )
+
     print("\nPREDICTION DISTRIBUTION")
+
     for index, class_name in enumerate(class_names):
         actual_count = int(np.sum(targets == index))
         predicted_count = int(np.sum(predictions == index))
@@ -358,7 +361,6 @@ def train(experiment):
         )
 
     print("\nCONFUSION MATRIX")
-    from sklearn.metrics import confusion_matrix
 
     cm = confusion_matrix(
         targets,
@@ -367,8 +369,8 @@ def train(experiment):
     )
 
     print(cm)
-    print(f"Checkpoint saved: {checkpoint_path}")
 
+    print(f"\nCheckpoint saved: {checkpoint_path}")
     print("\nTraining complete.")
     print("=" * 70)
 
@@ -378,7 +380,6 @@ def train(experiment):
 # ============================================================
 
 def main():
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
